@@ -1,0 +1,22 @@
+<schema name="events" version="1.5">
+    <types>
+        <fieldType name="int" class="solr.TrieIntField"/>
+        <fieldType name="bigint" class="solr.TrieLongField"/>
+        <fieldType name="string" class="solr.StrField"/>
+        <fieldType name="binary" class="solr.BinaryField"/>
+        <fieldType name="text" class="solr.TextField">
+            <analyzer>
+                <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+                <filter class="solr.LowerCaseFilterFactory"/>
+            </analyzer>
+        </fieldType>
+    </types>
+    <fields>
+        <field name="a" type="int" indexed="true" stored="true"/>
+        <field name="b" type="int" indexed="true" stored="true"/>
+        <field name="c" type="int" indexed="true" stored="true"/>
+        <field name="d" type="int" indexed="true" stored="true"/>
+    </fields>
+    <defaultSearchField>a</defaultSearchField>
+    <uniqueKey>(a)</uniqueKey>
+</schema>

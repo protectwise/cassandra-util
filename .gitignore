@@ -1,0 +1,4 @@
+/.idea
+cassandra.externally.managed.marker
+target/
+local.conf

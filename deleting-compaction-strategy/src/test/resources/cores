@@ -1,0 +1,25 @@
+#!/bin/bash
+
+HOST=$1
+ACTION=$2
+#NAME=$3
+#IFS='.' read -a PARTS <<< "$NAME"
+#SCHEMA="${PARTS[0]}"
+#CF="${PARTS[1]}"
+#FILENAME=$4
+#TEST=$5
+DIR="$(dirname "$0")/solr"
+
+set -e
+for FILE in $(find $DIR -name "schema.*.xml"); do
+    TABLE=$(echo $FILE | sed -e 's/^.*\/schema\.\(.*\)\.xml$/\1/')
+    CONFIGFILE="$DIR/testing-config.xml"
+
+    echo "Performing '$ACTION' for '$TABLE' using files:"
+    echo "  Config: $CONFIGFILE"
+    echo "  Schema: $FILE"
+
+    curl -s -k $HOST/solr/resource/$TABLE/solrconfig.xml --data-binary @$CONFIGFILE -H 'Content-Type: text/xml; charset=utf-8'
+    curl -s -k $HOST/solr/resource/$TABLE/schema.xml --data-binary @$FILE -H 'Content-Type: text/xml; charset=utf-8'
+    curl -s -k "$HOST/solr/admin/cores?action=$ACTION&name=$TABLE"
+done
