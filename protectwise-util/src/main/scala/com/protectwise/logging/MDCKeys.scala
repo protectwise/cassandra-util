@@ -3,9 +3,6 @@ package com.protectwise.logging
 import scala.concurrent.duration._
 
 object MDCKeys {
-  val agentIdKey = "agent_id"
-  val customerIdKey = "customer_id"
-  val partitionIdKey = "part_id"
   val requestIdKey = "request_id"
   val countKey = "count"
   val durationKey = "duration_ms"
@@ -23,10 +20,6 @@ trait MDCKeys {
     }
   }
 
-  case object AgentId    extends MDCKey[Long](MDCKeys.agentIdKey)
-  case object SensorId   extends MDCKey[Long](MDCKeys.agentIdKey)
-  case object CustomerId extends MDCKey[Long](MDCKeys.customerIdKey)
-  case object PartitionId extends MDCKey[Int](MDCKeys.partitionIdKey)
   case object RequestId extends MDCKey[String](MDCKeys.requestIdKey)
   case object Count      extends MDCKey[Long](MDCKeys.countKey)
   case object DurationMs extends MDCKey[Long](MDCKeys.durationKey) {

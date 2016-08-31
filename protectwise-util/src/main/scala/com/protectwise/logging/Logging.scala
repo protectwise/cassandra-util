@@ -24,19 +24,3 @@ trait Logging extends MDCKeys {
    */
   protected def defaultMdc = Seq.empty[(String, Any)]
 }
-
-/**
- * Mix in to allow for setting the agentId in the MDC context.
- *
- * Also exposes a wrapped version of Logger that has special methods to
- * log out the different Agent ID MDC values on a per call basis
- */
-trait AgentLogging extends Logging {
-  /**
-   * An AgentLogger instance
-   *
-   * import logger._ to acheive the old AgentLogging functionality
-   */
-  @transient
-  override protected[this] lazy val logger = new AgentLogger(_logger)
-}
