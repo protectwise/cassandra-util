@@ -2,7 +2,7 @@
 A series of utilities for working with Apache Cassandra.
 
 ## CCM Testing Helper
-Testing fixtures for interacting with CCM for automated integration tests.  Use configuration to define a set of cluster topologies and let these classes rather than a sequence of esoteric CCM commands.
+Testing fixtures for interacting with CCM for automated integration tests.  Use configuration to define a set of cluster topologies and let these classes manage setup and teardown rather than a sequence of esoteric CCM commands.
 
 See [reference.conf](ccm-testing-helper/src/main/resources/reference.conf) for example configurations.
 
