@@ -1,0 +1,7 @@
+#!/bin/bash
+args="deleting-compaction-strategy/test:run-main com.protectwise.testing.ccm.CassandraSetup"
+for arg in "$@"; do
+  args="$args \"$arg\""
+done
+sbt "$args"
+
