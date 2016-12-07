@@ -135,12 +135,15 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
   def alterCompactionStrategy(ks: String, table: String, compaction: Map[String, String]=baselineCompaction)
                              (implicit session: CQLSession): Unit = {
     def escape(v: String) = v.replace("'", "''")
-    Seq(
+    val statements = Seq(
       cql"""ALTER TABLE ${Inline(s"$ks.$table")} WITH
             |compaction = {
             |  ${Inline(compaction.map{ case (k,v) => s"'${escape(k)}': '${escape(v)}'" }.mkString(",\n  "))}
             |}""".stripMargin
-    ).foreach { st =>
+    )
+//    statements.foreach(println)
+
+    statements.foreach { st =>
       Await.result(st.execute(), 100.seconds)
     }
 

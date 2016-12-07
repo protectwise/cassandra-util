@@ -37,9 +37,11 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 	private static final Logger logger = LoggerFactory.getLogger(RuleBasedLateTTLConvictor.class);
 
 	public final static String RULES_STATEMENT_KEY = "rules_select_statement";
+	public final static String DEFAULT_TTL_KEY = "default_ttl";
 
 	protected final String selectStatement;
 	protected final List<Rule> rules;
+	protected final Long defaultTTL;
 	protected boolean isSpooked = false;
 	protected boolean containsPartitionKeys;
 	protected boolean containsClusterKeys;
@@ -186,6 +188,19 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 	{
 		super(cfs, options);
 		selectStatement = options.get(RULES_STATEMENT_KEY);
+		if (options.containsKey(DEFAULT_TTL_KEY))
+		{
+			try
+			{
+				defaultTTL = Long.parseLong(options.get(DEFAULT_TTL_KEY));
+			}
+			catch (NumberFormatException e)
+			{
+				throw new ConfigurationException("Invalid value '" + options.get(DEFAULT_TTL_KEY) + "' for " + DEFAULT_TTL_KEY, e);
+			}
+		} else {
+			defaultTTL = null;
+		}
 		rules = translateRules(parseRules(selectStatement));
 		logger.debug("Got {} rules to consider", rules.size());
 	}
@@ -482,6 +497,20 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			throw new ConfigurationException("Invalid select statement: " + e.getMessage(), e);
 		}
 
+		String defaultTTL = options.get(DEFAULT_TTL_KEY);
+		if (defaultTTL != null)
+		{
+			try
+			{
+				Long.parseLong(defaultTTL);
+			}
+			catch (NumberFormatException e)
+			{
+				throw new ConfigurationException("Invalid value '" + options.get(DEFAULT_TTL_KEY) + "' for " + DEFAULT_TTL_KEY, e);
+			}
+		}
+
+		options.remove(DEFAULT_TTL_KEY);
 		options.remove(RULES_STATEMENT_KEY);
 		return options;
 	}
@@ -535,6 +564,16 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			// super.shouldKeepAtom maintains the state on cluster keys, calling into shouldKeepCluster
 			// when appropriate, so that our cluster's TTL is correctly maintained.
 			super.shouldKeepAtom(partition, atom);
+		}
+
+		// If effectiveTTL is null at this point, it's because no rules hit, we fall back to the default TTL if it was set.
+		if (effectiveTTL == null)
+		{
+			if (logger.isTraceEnabled())
+			{
+				logger.trace("Falling back to default ttl ({}) for partition {}:{}",  defaultTTL, PrintHelper.print(partition, cfs), PrintHelper.print(atom, cfs));
+			}
+			effectiveTTL = defaultTTL;
 		}
 
 		if (effectiveTTL == null)
