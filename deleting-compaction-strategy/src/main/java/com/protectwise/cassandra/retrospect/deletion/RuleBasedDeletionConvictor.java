@@ -31,6 +31,7 @@ import org.apache.cassandra.db.marshal.TupleType;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.SyntaxException;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.slf4j.Logger;
@@ -61,7 +62,28 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 	{
 		super(cfs, options);
 		selectStatement = options.get(RULES_STATEMENT_KEY);
-		rules = translateRules(parseRules(selectStatement));
+		List<Map<ByteBuffer, ByteBuffer[][]>> rules;
+		try
+		{
+			rules = translateRules(parseRules(selectStatement));
+		}
+		catch (ConfigurationException e)
+		{
+			// If we haven't fully started up before compaction begins, this error is expected because we can't
+			// necessarily query the rules table.  Try to avoid logging errors at startup, however outside of startup
+			// this should be a noisy exception.
+			if (!Gossiper.instance.isEnabled())
+			{
+				rules = new ArrayList<>(0);
+				isSpooked = true;
+				logger.info("Unable to query for deletion rules data, however it looks like this node has not fully joined the ring, so defaulting to a dry run.");
+			}
+			else
+			{
+				throw e;
+			}
+		}
+		this.rules = rules;
 		logger.info("Got {} rules to consider", rules.size());
 	}
 
@@ -82,7 +104,8 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 		}
 		catch (RequestExecutionException e)
 		{
-			throw new ConfigurationException("Unable to query for rule data", e);
+			ConfigurationException ce = new ConfigurationException("Unable to query for rule data.  The failed statement was " + statement, e);
+			throw ce;
 		}
 
 		Map<String, ColumnSpecification> cols = new HashMap<>();
