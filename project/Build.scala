@@ -165,6 +165,8 @@ object CassandraUtilBuild extends Build {
         "fr.janalyse" %% "janalyse-jmx" % "0.7.2"
       ),
 
+      resolvers += "JAnalyse Repository" at "http://www.janalyse.fr/repository/",
+
       javaOptions in(Test, run) ++= Seq(
         "-d64",
         "-server",
