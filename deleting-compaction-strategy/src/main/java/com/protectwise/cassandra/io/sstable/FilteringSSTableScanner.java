@@ -24,6 +24,7 @@ import com.protectwise.cassandra.db.compaction.IDeletedRecordsSink;
 import org.apache.cassandra.db.Cell;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DataRange;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.OnDiskAtom;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.dht.Range;
@@ -154,6 +155,12 @@ public class FilteringSSTableScanner implements ISSTableScanner
 							indexedColumnsInRow.add((Cell) column);
 						}
 						// Keep all records so they make it into the backup sink.
+						return true;
+					}
+
+					@Override
+					public boolean shouldKeepTopLevelDeletion(OnDiskAtomIterator partition, DeletionTime deletionTime)
+					{
 						return true;
 					}
 				}, cfs, false, null));

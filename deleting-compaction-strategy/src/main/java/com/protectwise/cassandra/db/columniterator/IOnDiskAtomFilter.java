@@ -15,10 +15,12 @@
  */
 package com.protectwise.cassandra.db.columniterator;
 
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.OnDiskAtom;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
 
 public interface IOnDiskAtomFilter {
     public boolean shouldKeepAtom(OnDiskAtomIterator partition, OnDiskAtom atom);
+    public boolean shouldKeepTopLevelDeletion(OnDiskAtomIterator partition, DeletionTime deletionTime);
 }

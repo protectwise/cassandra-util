@@ -27,6 +27,7 @@ import org.apache.cassandra.cql3.statements.ParsedStatement;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.OnDiskAtom;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
@@ -651,6 +652,19 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			}
 		}
 		return true;
+	}
+
+	@Override
+	public boolean shouldKeepTopLevelDeletion(OnDiskAtomIterator partition, DeletionTime deletionTime)
+	{
+		final long atomTimestampInMillis = deletionTime.markedForDeleteAt / 1000;
+		final long recordAgeInSeconds = (this.fixedTtlBaseTime - atomTimestampInMillis) / 1000;
+		final boolean shouldKeep = (effectiveTTL == null) || (recordAgeInSeconds <= effectiveTTL);
+		if (logger.isTraceEnabled())
+		{
+			logger.trace("TopLevelDeletion age {}, effective TTL of {}, {} {}.", recordAgeInSeconds, effectiveTTL, (shouldKeep ? "keeping" : "deleting"), PrintHelper.print(partition, cfs));
+		}
+		return shouldKeep;
 	}
 
 	/**

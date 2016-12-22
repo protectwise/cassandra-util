@@ -117,7 +117,16 @@ public class FilteringOnDiskAtomIterator implements OnDiskAtomIterator {
      */
     @Override
     public ColumnFamily getColumnFamily() {
-        return underlying.getColumnFamily();
+        ColumnFamily underlyingColumnFamily = underlying.getColumnFamily();
+        DeletionTime topLevelDeletion = underlyingColumnFamily.deletionInfo().getTopLevelDeletion();
+        if (filter.shouldKeepTopLevelDeletion(underlying, topLevelDeletion))
+        {
+          return underlyingColumnFamily;
+        }
+        else
+        {
+          return ArrayBackedSortedColumns.factory.create(underlyingColumnFamily.metadata());
+        }
     }
 
     /**

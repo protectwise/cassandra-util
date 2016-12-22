@@ -524,6 +524,32 @@ class DeletingCompactionStrategySpec extends Specification with BeforeAfter with
           "right number of records after" ==> (result.one().getLong("c") mustEqual 6)
         }
       }
+
+      "deletes row tombstones" in {
+        truncate("testing.deletion_rules_ttl")
+        setupData("testing.deletion_rules_ttl",
+          "ks" || "tbl" || "rulename" || "column" || "range" || "ttl"
+        | ks   !! table !! "cid_7"    !! "id"     !! (("000", "111")) !! 150l
+        )
+
+        truncate(s"$ks.$table")
+        Await.result(cql"DELETE FROM ${Inline(s"$ks.$table")} USING timestamp ${aged(100)} WHERE tenant = 1827 AND id = '000'".execute(), Duration.Inf)
+        Await.result(cql"DELETE FROM ${Inline(s"$ks.$table")} USING timestamp ${aged(200)} WHERE tenant = 1827 AND id = '111'".execute(), Duration.Inf)
+        Await.result(cql"DELETE FROM ${Inline(s"$ks.$table")} USING timestamp ${aged(300)} WHERE tenant = 1827 AND id = '222'".execute(), Duration.Inf)
+
+        compactAllFiles(ks, table)
+
+        setupTimestampedData(s"$ks.$table",
+          "tenant" || "id" || "timestamp"
+        | 1827l !! "000" !! aged(600) // Behind non-compacted tombstone
+        | 1827l !! "111" !! aged(600) // Seen (until next compaction)
+        | 1827l !! "222" !! aged(600) // Behind non-compacted tombstone
+        )
+
+        val result = Await.result(cql"SELECT tenant, id FROM ${Inline(ks)}.${Inline(table)}".execute(), Duration.Inf)
+        val ids = result.iterator().asScala.toIterable.map( row => row.getString("id") ).toList
+        "right results are not behind tombstones" ==> (ids mustEqual Seq("111"))
+      }
     }
 
     "example configurable conviction strategy seems to not suck" in {

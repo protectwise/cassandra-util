@@ -21,6 +21,7 @@ import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.db.Cell;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.OnDiskAtom;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
@@ -114,6 +115,12 @@ public abstract class AbstractSimpleDeletingConvictor implements ISSTableScanner
 
 	@Override
 	public boolean shouldKeepAtom(OnDiskAtomIterator partition, OnDiskAtom atom)
+	{
+		return true;
+	}
+
+	@Override
+	public boolean shouldKeepTopLevelDeletion(OnDiskAtomIterator partition, DeletionTime deletionTime)
 	{
 		return true;
 	}
