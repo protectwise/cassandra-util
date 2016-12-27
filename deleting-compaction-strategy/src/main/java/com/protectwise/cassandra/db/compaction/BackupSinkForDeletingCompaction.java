@@ -70,11 +70,25 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 	{
 		flush();
 		currentKey = partition.getKey();
+		accept(partition.getKey(), partition.getColumnFamily().deletionInfo().getTopLevelDeletion());
 		// Write through the entire partition.
 		while (partition.hasNext())
 		{
 			accept(partition.getKey(), partition.next());
 		}
+	}
+
+	@Override
+	public void accept(DecoratedKey key, DeletionTime topLevelDeletion)
+	{
+		if (currentKey != key)
+		{
+			flush();
+			currentKey = key;
+		}
+
+		columnFamily.delete(topLevelDeletion);
+		isEmpty = false;
 	}
 
 	@Override

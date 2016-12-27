@@ -16,6 +16,7 @@
 package com.protectwise.cassandra.db.compaction;
 
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.OnDiskAtom;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.slf4j.Logger;
@@ -30,6 +31,13 @@ public interface IDeletedRecordsSink extends AutoCloseable
 	 * @param partition
 	 */
 	void accept(OnDiskAtomIterator partition);
+
+	/**
+	 * Accept an partition deletion time
+	 * @param key
+	 * @param topLevelDeletion
+	 */
+	void accept(DecoratedKey key, DeletionTime topLevelDeletion);
 
 	/**
 	 * Accept just some cells of a partition

@@ -45,6 +45,7 @@ public class FilteringOnDiskAtomIterator implements OnDiskAtomIterator {
     protected final ColumnFamilyStore cfs;
     protected final List<Cell> indexedColumnsInRow;
     protected final boolean dryRun;
+    protected final IDeletedRecordsSink backupSink;
 
     public long kept = 0;
     public long filtered = 0;
@@ -60,6 +61,7 @@ public class FilteringOnDiskAtomIterator implements OnDiskAtomIterator {
         this.filter = filter;
         this.cfs = cfs;
         this.dryRun = dryRun;
+        this.backupSink = backupSink;
 
         final boolean hasIndexes = cfs.indexManager.hasIndexes();
         if (hasIndexes) this.indexedColumnsInRow = new ArrayList<Cell>();
@@ -125,6 +127,10 @@ public class FilteringOnDiskAtomIterator implements OnDiskAtomIterator {
         }
         else
         {
+            if (backupSink != null)
+            {
+                backupSink.accept(underlying.getKey(), topLevelDeletion);
+            }
             return ArrayBackedSortedColumns.factory.create(underlyingColumnFamily.metadata());
         }
     }
