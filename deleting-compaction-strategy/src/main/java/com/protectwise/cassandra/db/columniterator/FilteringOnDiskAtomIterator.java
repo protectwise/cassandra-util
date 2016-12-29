@@ -121,7 +121,7 @@ public class FilteringOnDiskAtomIterator implements OnDiskAtomIterator {
     public ColumnFamily getColumnFamily() {
         ColumnFamily underlyingColumnFamily = underlying.getColumnFamily();
         DeletionTime topLevelDeletion = underlyingColumnFamily.deletionInfo().getTopLevelDeletion();
-        if (filter.shouldKeepTopLevelDeletion(underlying, topLevelDeletion))
+        if (topLevelDeletion.isLive() || filter.shouldKeepTopLevelDeletion(underlying, topLevelDeletion))
         {
             return underlyingColumnFamily;
         }
