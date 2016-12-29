@@ -659,7 +659,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 	{
 		final long atomTimestampInMillis = deletionTime.markedForDeleteAt / 1000;
 		final long recordAgeInSeconds = (this.fixedTtlBaseTime - atomTimestampInMillis) / 1000;
-		final boolean shouldKeep = (effectiveTTL == null) || (recordAgeInSeconds <= effectiveTTL);
+		final boolean shouldKeep = (effectiveTTL == null) || (effectiveTTL < 0) || (recordAgeInSeconds <= effectiveTTL);
 		if (logger.isTraceEnabled())
 		{
 			logger.trace("TopLevelDeletion age {}, effective TTL of {}, {} {}.", recordAgeInSeconds, effectiveTTL, (shouldKeep ? "keeping" : "deleting"), PrintHelper.print(partition, cfs));
