@@ -10,10 +10,12 @@ object CassandraUtilBuild extends Build {
 
   val libVersion = "0.25"
   val datastaxVersion = "3.0.0"
+  //val datastaxVersion = "2.1.7"
   val slf4jVersion = "1.7.+"
   val guavaVersion = "17.0"
   val playVersion = "2.3.+"
   val cassandraVersion = "2.1.14"
+  //val cassandraVersion = "2.1.8"
 
   val scalaVersionsToCompile = Seq("2.10.5", "2.11.6")
 
@@ -43,7 +45,8 @@ object CassandraUtilBuild extends Build {
           "-Yclosure-elim"
         ),
         resolvers ++= Seq(
-          "Sonatype OSS Releases" at "http://oss.sonatype.org/content/repositories/releases"
+          "Sonatype OSS Releases" at "http://oss.sonatype.org/content/repositories/releases",
+          "JAnalyse Repository" at "http://www.janalyse.fr/repository/"
         ),
         conflictWarning := ConflictWarning.disable,
         testOptions in Test += Tests.Argument("junitxml", "console"),

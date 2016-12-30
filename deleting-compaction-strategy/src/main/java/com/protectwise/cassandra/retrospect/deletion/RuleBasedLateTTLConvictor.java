@@ -32,6 +32,7 @@ import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.TupleType;
+import org.apache.cassandra.db.marshal.MapType;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.SyntaxException;
@@ -242,7 +243,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			cols.put(cs.name.toString(), cs);
 		}
 
-		if (!cols.containsKey("column") || !cols.containsKey("rulename") || !cols.containsKey("range") || !cols.containsKey("ttl"))
+		if (!cols.containsKey("column") || !cols.containsKey("rulename") || !cols.containsKey("range_lower") || !cols.containsKey("range_upper") || !cols.containsKey("ttl"))
 		{
 			throw new ConfigurationException("The select statement must return the columns 'column', 'rulename', 'range', and 'ttl'");
 		}
@@ -254,7 +255,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		}
 
 		//  Validate that "range" is of type tuple<text,text>, ugh.
-		CQL3Type rangeType = cols.get("range").type.asCQL3Type();
+		/*CQL3Type rangeType = cols.get("range").type.asCQL3Type();
 		if (!(rangeType instanceof CQL3Type.Tuple))
 		{
 			throw new ConfigurationException("The column 'range' must be of type tuple<text,text>  Found " + cols.get("column").type.getSerializer().getType());
@@ -270,7 +271,18 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			{
 				throw new ConfigurationException("The column 'range' must be of type tuple<text,text>  Found " + cols.get("column").type.getSerializer().getType());
 			}
+		}*/
+
+		// validate that range, range_lower, range_upper
+                CQL3Type rangeLowerType = cols.get("range_lower").type.asCQL3Type();
+		if(!rangeLowerType.equals(CQL3Type.Native.TEXT)) {
+			throw new ConfigurationException("The column 'range_lower' must be of type text  Found " + cols.get("range_lower").type.getSerializer().getType());
 		}
+
+		CQL3Type rangeUpperType = cols.get("range_upper").type.asCQL3Type();
+                if(!rangeLowerType.equals(CQL3Type.Native.TEXT)) {
+                        throw new ConfigurationException("The column 'range' must be of type map<text,text>  Found " + cols.get("range_upper").type.getSerializer().getType());
+                }
 
 		// Validate that 'ttl' is of type bigint
 		CQL3Type ttlType = cols.get("ttl").type.asCQL3Type();
@@ -314,7 +326,9 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 				ranges = new ArrayList<>();
 				rule.put(column, ranges);
 			}
-			ByteBuffer[] rawRange = ((TupleType) rangeType.getType()).split(row.getBlob("range"));
+			ByteBuffer[] rawRange = new ByteBuffer[2];
+			rawRange[0] = row.getBlob("range_lower");
+			rawRange[1] =  row.getBlob("range_upper");
 			ranges.add(rawRange);
 			if (logger.isDebugEnabled())
 			{
