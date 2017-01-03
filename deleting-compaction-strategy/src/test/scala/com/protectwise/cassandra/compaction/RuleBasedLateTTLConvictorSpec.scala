@@ -304,6 +304,37 @@ class RuleBasedLateTTLConvictorSpec extends Specification with Logging with NoTi
           "right number of records after" ==> (result.one().getLong("c") mustEqual 6)
         }
 
+        "handle overlapping keys" in {
+          setup()
+          truncate(s"$ks.$table")
+
+          setupTimestampedData(s"$ks.$table",
+             "tenant" || "id" || "timestamp"
+             | 1827l !! "000151d4e6fec2fde7240e6c5e1fce00" !! aged(600) // Delete
+             | 1827l !! "00000151e992ed8adb38cfbc2e6c0c52" !! aged(600) // Keep
+
+          )
+          flushTable(ks, table)
+
+          setupTimestampedData(s"$ks.$table",
+            "tenant" || "id" || "timestamp"
+              | 1827l !! "000151d4e6fec2fde7240e6c5e1fce00" !! aged(600) // Delete
+              | 1827l !! "00000151e992ed8adb38cfbc2e6c0c52" !! aged(600) // Keep
+          )
+
+          truncate("testing.deletion_rules_ttl")
+          setupData("testing.deletion_rules_ttl",
+              "ks" || "tbl" || "rulename" || "column" || "range" || "ttl"
+            | ks   !! table !! "cid_7"    !! "id"     !! (("00001f", null)) !! 0l
+          )
+
+          compactAllFiles(ks, table, 100)
+
+          val result = Await.result(cql"SELECT count(*) AS c FROM ${Inline(ks)}.${Inline(table)}".execute(), Duration.Inf)
+          "right number of records after" ==> (result.one().getLong("c") mustEqual 1)
+        }
+      }
+
     }
   }
 
