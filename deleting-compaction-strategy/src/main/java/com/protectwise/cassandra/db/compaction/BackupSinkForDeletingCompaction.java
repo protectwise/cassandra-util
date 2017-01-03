@@ -37,7 +37,8 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 
 	protected SSTableWriter writer;
 	protected DecoratedKey currentKey;
-	protected boolean isEmpty = true;
+	protected long numCells = 0;
+	protected long numKeys = 0;
 
 	public BackupSinkForDeletingCompaction(ColumnFamilyStore cfs, File targetDirectory)
 	{
@@ -70,6 +71,7 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 	{
 		flush();
 		currentKey = partition.getKey();
+		numKeys++;
 		// Write through the entire partition.
 		while (partition.hasNext())
 		{
@@ -83,11 +85,12 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 		if (currentKey != key)
 		{
 			flush();
+			numKeys++;
 			currentKey = key;
 		}
 
+		numCells++;
 		columnFamily.addAtom(cell);
-		isEmpty = false;
 	}
 
 	@Override
@@ -107,10 +110,10 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 	@Override
 	public void close() throws IOException
 	{
-		if (!isEmpty)
+		if (numKeys > 0 && numCells > 0)
 		{
 			flush();
-			logger.info("Cleanly closing backup operation for {}", writer.getFilename());
+			logger.info("Cleanly closing backup operation for {} with {} keys and {} cells", writer.getFilename(), numKeys, numCells);
 			writer.close();
 		}
 		else
