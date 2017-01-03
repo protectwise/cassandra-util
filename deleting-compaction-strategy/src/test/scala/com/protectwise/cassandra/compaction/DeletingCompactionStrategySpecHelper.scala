@@ -22,8 +22,10 @@ import com.protectwise.cassandra.db.compaction.DeletingCompactionStrategy
 import com.protectwise.cql._
 import com.protectwise.logging.Logging
 import com.protectwise.testing.ccm.{CassandraCluster, CassandraDC, CassandraNode, CassandraSetup}
+import org.specs2.execute.Result
 import org.specs2.matcher.{Expectable, Matcher}
-import org.specs2.mutable.{BeforeAfter, Specification}
+import org.specs2.mutable.{BeforeAfter, Specification, SpecificationLike}
+import org.specs2.specification.{Example, Fragments, Step}
 import org.specs2.time.NoTimeConversions
 
 import scala.collection.JavaConverters._
@@ -32,7 +34,6 @@ import scala.concurrent.duration._
 import scala.sys.process.ProcessLogger
 
 trait DeletingCompactionStrategySpecHelper extends Specification with Logging with NoTimeConversions with BeforeAfter {
-
   step({
 
     implicit lazy val session = client.session
@@ -50,6 +51,26 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
     }
 
   })
+
+
+  override def map(fs: => Fragments): Fragments = {
+    super.map(
+      step(debug(s"Before ${getClass.getSimpleName}")) ^
+        fs.map {
+          case f: Example =>
+            val bodyProxy: () => Result = () => {
+              print(s"  ${f.desc.withMarkdown}... ")
+              val t = System.currentTimeMillis()
+              val r = f.body()
+              println(f"${(System.currentTimeMillis() - t).toFloat / 1000}%,.03f s")
+              r
+            }
+            f.copy(f.desc, bodyProxy)
+          case f => f
+        } ^
+        step(debug(s"After ${getClass.getSimpleName}"))
+    )
+  }
 
   lazy val onlyOnce = CassandraSetup.doAllSetup()
   lazy val client = CassandraClient("default")
