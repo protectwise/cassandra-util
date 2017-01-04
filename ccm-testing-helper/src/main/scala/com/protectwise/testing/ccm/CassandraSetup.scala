@@ -145,7 +145,7 @@ object CassandraSetup {
   }
 
   def doAllSetup(): Unit = {
-    println("Making sure Casasndra is all up and jazzy.")
+    println("Making sure Cassandra is all up and jazzy.")
     if (!markerFileExists) {
       sys.addShutdownHook(teardownCassandra)
       createCassandra

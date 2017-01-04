@@ -16,14 +16,17 @@
 package com.protectwise.cassandra.compaction
 
 import java.io.{File, FilenameFilter}
-import java.nio.file.{FileSystems, NoSuchFileException, NotDirectoryException, StandardWatchEventKinds}
+import java.nio.file._
+import java.util.concurrent.TimeUnit
 
 import com.protectwise.cassandra.db.compaction.DeletingCompactionStrategy
 import com.protectwise.cql._
 import com.protectwise.logging.Logging
 import com.protectwise.testing.ccm.{CassandraCluster, CassandraDC, CassandraNode, CassandraSetup}
+import org.specs2.execute.Result
 import org.specs2.matcher.{Expectable, Matcher}
-import org.specs2.mutable.{BeforeAfter, Specification}
+import org.specs2.mutable.{BeforeAfter, Specification, SpecificationLike}
+import org.specs2.specification.{Example, Fragments, Step}
 import org.specs2.time.NoTimeConversions
 
 import scala.collection.JavaConverters._
@@ -32,7 +35,6 @@ import scala.concurrent.duration._
 import scala.sys.process.ProcessLogger
 
 trait DeletingCompactionStrategySpecHelper extends Specification with Logging with NoTimeConversions with BeforeAfter {
-
   step({
 
     implicit lazy val session = client.session
@@ -50,6 +52,26 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
     }
 
   })
+
+
+  override def map(fs: => Fragments): Fragments = {
+    super.map(
+      step(debug(s"Before ${getClass.getSimpleName}")) ^
+        fs.map {
+          case f: Example =>
+            val bodyProxy: () => Result = () => {
+              print(s"  ${f.desc.withMarkdown}... ")
+              val t = System.currentTimeMillis()
+              val r = f.body()
+              println(f"${(System.currentTimeMillis() - t).toFloat / 1000}%,.03f s")
+              r
+            }
+            f.copy(f.desc, bodyProxy)
+          case f => f
+        } ^
+        step(debug(s"After ${getClass.getSimpleName}"))
+    )
+  }
 
   lazy val onlyOnce = CassandraSetup.doAllSetup()
   lazy val client = CassandraClient("default")
@@ -141,14 +163,23 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
   def watchForFileToRename(targetFile: File, knownFiles: Set[File], filter: FilenameFilter, retries: Int = 5): Set[File] = {
 //    println(s"WATCH: $targetFile")
     if (targetFile.exists()) {
-      import sys.process._
       val fs = FileSystems.getDefault
-      val path = fs.getPath(targetFile.getParentFile.getPath)
+      val path: Path = fs.getPath(targetFile.getParentFile.getPath)
       val ws = fs.newWatchService()
       try {
         path.register(ws, StandardWatchEventKinds.ENTRY_DELETE)
         // Blocks until the file delete is detected
-        val event = scala.concurrent.blocking(ws.take())
+        if (targetFile.exists()) {
+          var wk: WatchKey = null
+          do {
+            wk = scala.concurrent.blocking(ws.poll(retries, TimeUnit.SECONDS))
+          } while (wk != null && wk.pollEvents().asScala.exists {
+            case e: WatchEvent[Path] =>
+              e.context() == targetFile
+            case e: WatchEvent[_] => false
+          })
+          if (wk == null && targetFile.exists()) throw new Exception(s"The file $targetFile did not rename within the timeout.")
+        }
       } catch {
         case e: NoSuchFileException =>
         // This will happen if compaction completed before we got to this point, which is pretty frequent actually
@@ -157,17 +188,12 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
           // and the path is the data directory for the node, which we've already flushed data out to
           // and which would exist even if we had never written data.
           logger.warn(s"Caught NotDirectoryException on ${path}, retrying ${retries-1} more times")
-          val cmd = "ls -lah " + targetFile.getPath
-          val out: String = cmd.!!
-          println(cmd)
-          println(out)
           Thread.sleep(200l)
           return watchForFileToRename(targetFile, knownFiles, filter, retries - 1)
       } finally {
         ws.close()
       }
     }
-
 
     knownFiles.foldLeft(targetFile.getParentFile.listFiles(filter).toSet) { case (acc, file) =>
       acc - file
