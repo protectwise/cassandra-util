@@ -425,6 +425,10 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 			if (allColumnsFail)
 			{
 				// This record gets deleted.
+				if (logger.isTraceEnabled())
+				{
+					logger.error("Convicting {}", PrintHelper.print(key, cfs));
+				}
 				return false;
 			}
 		}
@@ -465,6 +469,10 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 
 			if (allColumnsFail)
 			{
+				if (logger.isTraceEnabled())
+				{
+					logger.trace("Convicting {}", PrintHelper.print(partition, cfs));
+				}
 				return false;
 			}
 		}

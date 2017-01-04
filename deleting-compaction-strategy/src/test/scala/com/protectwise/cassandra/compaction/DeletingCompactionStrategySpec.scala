@@ -111,6 +111,9 @@ class DeletingCompactionStrategySpec extends Specification with Logging with NoT
       | "OddClusterKeyDeleter"   !! "dualpk_dualck"     !! 50             !! 0.0f
       ) |> {
         case (convictor, table, reduction, tolerance) =>
+          val escCode : Char = 0x1B
+          val v = s"$convictor:$table"
+          System.out.print(f"$escCode%c[0K$v%s$escCode%c[${v.length}%dD")
           implicit val session = client.session
           val ks = "testing"
 
