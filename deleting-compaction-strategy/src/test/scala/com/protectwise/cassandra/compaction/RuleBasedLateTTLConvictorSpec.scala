@@ -304,6 +304,7 @@ class RuleBasedLateTTLConvictorSpec extends Specification with Logging with NoTi
           "right number of records after" ==> (result.one().getLong("c") mustEqual 6)
         }
 
+      }
     }
   }
 

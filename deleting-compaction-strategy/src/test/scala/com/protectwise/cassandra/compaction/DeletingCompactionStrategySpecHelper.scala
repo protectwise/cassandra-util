@@ -162,14 +162,15 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
   def watchForFileToRename(targetFile: File, knownFiles: Set[File], filter: FilenameFilter, retries: Int = 5): Set[File] = {
 //    println(s"WATCH: $targetFile")
     if (targetFile.exists()) {
-      import sys.process._
       val fs = FileSystems.getDefault
-      val path = fs.getPath(targetFile.getParentFile.getPath)
+      val path = fs.getPath(targetFile.getPath)
       val ws = fs.newWatchService()
       try {
         path.register(ws, StandardWatchEventKinds.ENTRY_DELETE)
         // Blocks until the file delete is detected
-        val event = scala.concurrent.blocking(ws.take())
+        if (targetFile.exists()) {
+          scala.concurrent.blocking(ws.take())
+        }
       } catch {
         case e: NoSuchFileException =>
         // This will happen if compaction completed before we got to this point, which is pretty frequent actually
@@ -188,7 +189,6 @@ trait DeletingCompactionStrategySpecHelper extends Specification with Logging wi
         ws.close()
       }
     }
-
 
     knownFiles.foldLeft(targetFile.getParentFile.listFiles(filter).toSet) { case (acc, file) =>
       acc - file

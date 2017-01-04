@@ -27,26 +27,26 @@ import scala.concurrent.duration.Duration
 
 class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoTimeConversions with DataTables with DeletingCompactionStrategySpecHelper {
   "RuleBasedDeletionConvictor" should {
+    implicit val session = client.session
+    val ks = "testing"
+    val table = "tenanted"
 
+    // Go to deleting compaction strategy
+    def setup(k: String=ks, t: String=table) = alterCompactionStrategy(k, t, Map(
+      "class" -> "com.protectwise.cassandra.db.compaction.DeletingCompactionStrategy",
+      "dcs_convictor" -> "com.protectwise.cassandra.retrospect.deletion.RuleBasedDeletionConvictor",
+      "rules_select_statement" -> s"SELECT rulename, column, range FROM testing.deletion_rules WHERE ks='$k' AND tbl='$t'",
+      "dcs_underlying_compactor" -> "org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy",
+      "dcs_backup_dir" -> "/tmp/backups",
+      "dcs_status_report_ms" -> "1",
+      "min_threshold" -> "2",
+      "max_threshold" -> "2"
+    ))
     "respond to a rules table" in {
       sequential
-      implicit val session = client.session
-      val ks = "testing"
-      val table = "tenanted"
 
-      // Go to deleting compaction strategy
-      alterCompactionStrategy(ks, table, Map(
-        "class" -> "com.protectwise.cassandra.db.compaction.DeletingCompactionStrategy",
-        "dcs_convictor" -> "com.protectwise.cassandra.retrospect.deletion.RuleBasedDeletionConvictor",
-        "rules_select_statement" -> "SELECT rulename, column, range FROM testing.deletion_rules WHERE ks='testing' AND tbl='tenanted'",
-        "dcs_underlying_compactor" -> "org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy",
-        "dcs_backup_dir" -> "/tmp/backups",
-        "dcs_status_report_ms" -> "1",
-        "min_threshold" -> "2",
-        "max_threshold" -> "2"
-      ))
-
-      "rule with multiple agents" in {
+      "rule with multiple tenants" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
           "tenant" || "id"
@@ -62,20 +62,20 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
             | 1742l    !! "00000151f1470429cdf31d0485bb99e8" // X
             | 1742l    !! "00000151f4f221b20df147d1c14691b0" // X
             | 1742l    !! "00000151f7dabc8c37a47b98d3533552" // X
-            | 1753l    !! "00000151d2b65a18a3aa7058aa6a2116" // kept because of agent
-            | 1753l    !! "00000151f4da90041129071c9c9da7eb" // kept because of agent
-            | 1768l    !! "00000151e1f2e6c5eb875453555c4e2e" // kept because of agent
-            | 1768l    !! "00000151ffe7cc5df88bb70614edbbf0" // kept because of agent
-            | 1771l    !! "000001520af1e48e75c67e3c82791880" // kept because of flow ID
+            | 1753l    !! "00000151d2b65a18a3aa7058aa6a2116" // kept because of tenant
+            | 1753l    !! "00000151f4da90041129071c9c9da7eb" // kept because of tenant
+            | 1768l    !! "00000151e1f2e6c5eb875453555c4e2e" // kept because of tenant
+            | 1768l    !! "00000151ffe7cc5df88bb70614edbbf0" // kept because of tenant
+            | 1771l    !! "000001520af1e48e75c67e3c82791880" // kept because of ID
         )
 
         truncate("testing.deletion_rules")
         setupData("testing.deletion_rules",
           "ks" || "tbl" || "rulename" || "column" || "range"
-            | ks   !! table !! "cid_1"    !! "tenant" !! (("1726", "1726"))
-            | ks   !! table !! "cid_1"    !! "tenant" !! (("1742", "1742"))
-            | ks   !! table !! "cid_1"    !! "tenant" !! (("1771", "1771"))
-            | ks   !! table !! "cid_1"    !! "id"     !! ((null, "00000152000000000000000000000000"))
+        | ks   !! table !! "cid_1"    !! "tenant" !! (("1726", "1726"))
+        | ks   !! table !! "cid_2"    !! "tenant" !! (("1742", "1742"))
+        | ks   !! table !! "cid_3"    !! "tenant" !! (("1771", "1771"))
+        | ks   !! table !! "cid_3"    !! "id"     !! ((null, "00000152000000000000000000000000"))
         )
 
         compactAllFiles(ks, table)
@@ -85,6 +85,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "id range deletes correctly" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
           "tenant" || "id"
@@ -115,6 +116,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "cid range" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
           "tenant" || "id"
@@ -137,6 +139,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "shortened id range" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
            "tenant" || "id"
@@ -161,6 +164,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "full miss" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
            "tenant" || "id"
@@ -181,6 +185,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "internal range" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
            "tenant" || "id"
@@ -204,6 +209,7 @@ class RuleBasedDeletionConvictorSpec extends Specification with Logging with NoT
       }
 
       "sweep for oversized values" in {
+        setup()
         truncate(s"$ks.$table")
         setupData(s"$ks.$table",
            "tenant" || "id"
