@@ -252,6 +252,13 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		UntypedResultSet rawRuleData = null;
 		try
 		{
+			if (!Gossiper.instance.isEnabled())
+			{
+				// Yuck, exceptions for control flow.  This will be caught upstream during compaction as a signal that
+				// we should move to spooked mode.  Outside of compaction the exception will bubble up and be presented
+				// to the user (though it seems extremely unlikely)
+				throw new ConfigurationException("Node is not fully joined, so we cannot read deletion rules.  Falling back to standard compaction");
+			}
 			rawRuleData = QueryProcessor.process(statement, ConsistencyLevel.LOCAL_QUORUM);
 		}
 		catch (RequestExecutionException e)
