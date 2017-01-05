@@ -17,8 +17,6 @@ package com.protectwise.cassandra.retrospect.deletion;
 
 import com.protectwise.cassandra.db.compaction.AbstractClusterDeletingConvictor;
 import com.protectwise.cassandra.util.PrintHelper;
-import org.apache.cassandra.gms.Gossiper;
-import org.apache.cassandra.utils.Pair;
 import org.apache.cassandra.config.ColumnDefinition;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.ColumnSpecification;
@@ -38,6 +36,7 @@ import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.SyntaxException;
 import org.apache.cassandra.serializers.MarshalException;
 import org.apache.cassandra.utils.ByteBufferUtil;
+import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -223,7 +222,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			// If we haven't fully started up before compaction begins, this error is expected because we can't
 			// necessarily query the rules table.  Try to avoid logging errors at startup, however outside of startup
 			// this should be a noisy exception.
-			if (!Gossiper.instance.isEnabled())
+			if (!QueryHelper.hasStartedCQL())
 			{
 				rules = new ArrayList<>(0);
 				isSpooked = true;
@@ -252,7 +251,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		UntypedResultSet rawRuleData = null;
 		try
 		{
-			if (!Gossiper.instance.isEnabled())
+			if (!QueryHelper.hasStartedCQL())
 			{
 				// Yuck, exceptions for control flow.  This will be caught upstream during compaction as a signal that
 				// we should move to spooked mode.  Outside of compaction the exception will bubble up and be presented
