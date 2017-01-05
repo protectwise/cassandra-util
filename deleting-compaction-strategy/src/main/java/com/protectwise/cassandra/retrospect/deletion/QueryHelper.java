@@ -30,18 +30,9 @@ public class QueryHelper
 
     public static boolean hasStartedCQL()
     {
-        try
-        {
-            logger.info("Looking for address {}: {}, {}, {}", DatabaseDescriptor.getBroadcastRpcAddress(), Gossiper.instance.isEnabled(), Gossiper.instance.isKnownEndpoint(DatabaseDescriptor.getBroadcastRpcAddress()), Gossiper.instance.seenAnySeed());
-            return     Gossiper.instance.isEnabled()
-                    && Gossiper.instance.isKnownEndpoint(DatabaseDescriptor.getBroadcastRpcAddress())
-                    && seenAnySeedOrIsOnlySeed();
-        }
-        catch (Exception e)
-        {
-            logger.error(e.getMessage(), e);
-            throw e;
-        }
+        return     Gossiper.instance.isEnabled()
+                && Gossiper.instance.isKnownEndpoint(DatabaseDescriptor.getBroadcastRpcAddress())
+                && seenAnySeedOrIsOnlySeed();
     }
 
     public static boolean isSeed()
