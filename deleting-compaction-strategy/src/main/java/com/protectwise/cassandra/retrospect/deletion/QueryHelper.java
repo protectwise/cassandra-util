@@ -16,45 +16,14 @@
 
 package com.protectwise.cassandra.retrospect.deletion;
 
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.gms.Gossiper;
-import org.apache.cassandra.utils.FBUtilities;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.net.InetAddress;
+import org.apache.cassandra.service.StorageService;
 
 public class QueryHelper
 {
-    private static final Logger logger = LoggerFactory.getLogger(QueryHelper.class);
 
     public static boolean hasStartedCQL()
     {
-        return     Gossiper.instance.isEnabled()
-                && Gossiper.instance.isKnownEndpoint(DatabaseDescriptor.getBroadcastRpcAddress())
-                && seenAnySeedOrIsOnlySeed();
-    }
-
-    public static boolean isSeed()
-    {
-        for (InetAddress seed : DatabaseDescriptor.getSeeds())
-        {
-            if (seed.equals(FBUtilities.getBroadcastAddress()))
-                return true;
-        }
-        return false;
-    }
-
-    /**
-     * Test for whether a remote seed has been seen, or true if local is a seed and there are no remote seeds.
-     * @return
-     */
-    public static boolean seenAnySeedOrIsOnlySeed()
-    {
-        return
-               Gossiper.instance.seenAnySeed()
-            || DatabaseDescriptor.getSeeds().size() == 1 && isSeed();
-
+        return StorageService.instance.isRPCServerRunning() && StorageService.instance.isNativeTransportRunning();
     }
 
 }
