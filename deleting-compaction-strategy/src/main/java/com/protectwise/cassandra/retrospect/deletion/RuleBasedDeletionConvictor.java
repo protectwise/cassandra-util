@@ -18,7 +18,10 @@ package com.protectwise.cassandra.retrospect.deletion;
 import com.protectwise.cassandra.db.compaction.AbstractClusterDeletingConvictor;
 import com.protectwise.cassandra.util.PrintHelper;
 import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.cql3.*;
+import org.apache.cassandra.cql3.CQL3Type;
+import org.apache.cassandra.cql3.ColumnSpecification;
+import org.apache.cassandra.cql3.QueryProcessor;
+import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.ParsedStatement;
 import org.apache.cassandra.cql3.statements.SelectStatement;
 import org.apache.cassandra.db.ColumnFamilyStore;
@@ -36,10 +39,7 @@ import org.apache.cassandra.utils.ByteBufferUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.StringWriter;
 import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
 import java.util.*;
 
 public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
@@ -61,7 +61,28 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 	{
 		super(cfs, options);
 		selectStatement = options.get(RULES_STATEMENT_KEY);
-		rules = translateRules(parseRules(selectStatement));
+		List<Map<ByteBuffer, ByteBuffer[][]>> rules;
+		try
+		{
+			rules = translateRules(parseRules(selectStatement));
+		}
+		catch (ConfigurationException e)
+		{
+			// If we haven't fully started up before compaction begins, this error is expected because we can't
+			// necessarily query the rules table.  Try to avoid logging errors at startup, however outside of startup
+			// this should be a noisy exception.
+			if (!QueryHelper.hasStartedCQL())
+			{
+				rules = new ArrayList<>(0);
+				isSpooked = true;
+				logger.info("Unable to query for deletion rules data, however it looks like this node has not fully joined the ring, so defaulting to a dry run.");
+			}
+			else
+			{
+				throw e;
+			}
+		}
+		this.rules = rules;
 		logger.info("Got {} rules to consider", rules.size());
 	}
 
@@ -78,11 +99,19 @@ public class RuleBasedDeletionConvictor extends AbstractClusterDeletingConvictor
 		UntypedResultSet rawRuleData = null;
 		try
 		{
+			if (!QueryHelper.hasStartedCQL())
+			{
+				// Yuck, exceptions for control flow.  This will be caught upstream during compaction as a signal that
+				// we should move to spooked mode.  Outside of compaction the exception will bubble up and be presented
+				// to the user (though it seems extremely unlikely)
+				throw new ConfigurationException("Node is not fully joined, so we cannot read deletion rules.  Falling back to standard compaction");
+			}
 			rawRuleData = QueryProcessor.process(statement, ConsistencyLevel.LOCAL_QUORUM);
 		}
 		catch (RequestExecutionException e)
 		{
-			throw new ConfigurationException("Unable to query for rule data", e);
+			ConfigurationException ce = new ConfigurationException("Unable to query for rule data.  The failed statement was " + statement, e);
+			throw ce;
 		}
 
 		Map<String, ColumnSpecification> cols = new HashMap<>();
