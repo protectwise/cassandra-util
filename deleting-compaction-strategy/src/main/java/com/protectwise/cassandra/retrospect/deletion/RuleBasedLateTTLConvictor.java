@@ -24,9 +24,14 @@ import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.ParsedStatement;
 import org.apache.cassandra.cql3.statements.SelectStatement;
+import org.apache.cassandra.db.ArrayBackedSortedColumns;
+import org.apache.cassandra.db.Cell;
+import org.apache.cassandra.db.ColumnFamily;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.OnDiskAtom;
+import org.apache.cassandra.db.Row;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -41,6 +46,9 @@ import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.lang.StringBuilder;
+import java.lang.String;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -569,7 +577,32 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		options.remove(RULES_STATEMENT_KEY);
 		return options;
 	}
+	
+	private void iterateRow(OnDiskAtomIterator partition, ColumnFamily columnFamily)
+	{
+		DecoratedKey currentKey = partition.getKey();
+		
+		// Write through the entire partition.
+		while (partition.hasNext())
+		{
+			accept(currentKey, partition.getKey(), partition.next(), columnFamily);
+		}
+		//logger.warn("column family: {}", PrintHelper.print(partition, cfs));
+	}
 
+	
+	private void accept(DecoratedKey currentKey, DecoratedKey key, OnDiskAtom cell, ColumnFamily columnFamily)
+	{
+		if (currentKey != key)
+		{
+			currentKey = key;
+		}
+		if(cell instanceof Cell) {
+			logger.info("cell name is: {}, Composite: {}", ((Cell)cell).name().toByteBuffer(), cell.name());
+			//logger.info("cellvalue: {}", getBytes(cell.name(), cfs.metadata.getColumnDefinition(((Cell)cell).name())));
+		}
+		columnFamily.addAtom(cell);
+	}
 
 	@Override
 	public boolean shouldKeepPartition(OnDiskAtomIterator key)
@@ -586,6 +619,19 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		partitionRules = new ArrayList<>();
 		Map<ByteBuffer, ByteBuffer> namedPkColumns = getNamedPkColumns(key);
 
+		StringBuilder partitonKeys = new StringBuilder();
+		for(ByteBuffer bytes: namedPkColumns.keySet()) {
+                    partitonKeys.append(new String(bytes.array(), StandardCharsets.UTF_8));
+		}
+		
+        logger.info("Disk atom iterator: {}", PrintHelper.print(key, cfs));
+		logger.info("Named partiton keys are: {}", PrintHelper.printMap(namedPkColumns));
+		
+		//Row row = new Row(key.getKey(), key.getColumnFamily());
+
+		ColumnFamily columnFamily = ArrayBackedSortedColumns.factory.create(cfs.keyspace.getName(), cfs.getColumnFamilyName());
+		//iterateRow(key, columnFamily);
+		logger.info("Named row: {}", columnFamily);
 		for (Rule rule : rules)
 		{
 			if (rule.testColumns(namedPkColumns))
@@ -683,6 +729,13 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			logger.trace("Considering {} rules against the cluster key", partitionRules.size());
 		}
 		// We've already tested for the presence of cluster keys in the ruleset from within shouldKeepAtom()
+		Map<ByteBuffer, ByteBuffer> clusterKeyValues = getClusteringValues(name);
+		Map<ByteBuffer, ByteBuffer> namedPkColumns = getNamedPkColumns(partition);
+		
+		logger.info("clustering keys: {}", PrintHelper.printMap(clusterKeyValues));
+		logger.info("Partition keys: {}", PrintHelper.printMap(namedPkColumns));
+		logger.info("row: {}", PrintHelper.print(partition, cfs));
+		
 		for (Rule rule : partitionRules)
 		{
 			if (rule.testColumns(getClusteringValues(name)))
