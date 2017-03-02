@@ -17,14 +17,21 @@ package com.protectwise.cassandra.db.compaction;
 
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
+import org.apache.cassandra.db.composites.CellName;
 import org.apache.cassandra.io.sstable.SSTableWriter;
 import org.apache.cassandra.io.sstable.metadata.MetadataCollector;
 import org.apache.cassandra.service.ActiveRepairService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.protectwise.cassandra.util.PrintHelper;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Map.Entry;
 
 public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 {
@@ -37,7 +44,8 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 
 	protected SSTableWriter writer;
 	protected DecoratedKey currentKey;
-	protected boolean isEmpty = true;
+	protected long numCells = 0;
+	protected long numKeys = 0;
 
 	public BackupSinkForDeletingCompaction(ColumnFamilyStore cfs, File targetDirectory)
 	{
@@ -70,24 +78,32 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 	{
 		flush();
 		currentKey = partition.getKey();
+		numKeys++;
 		// Write through the entire partition.
+		StringBuilder strBuilder = new StringBuilder();
 		while (partition.hasNext())
-		{
-			accept(partition.getKey(), partition.next());
+		{			
+			OnDiskAtom cell  = partition.next();
+			//strBuilder.append(PrintHelper.print(cell, cfs));
+			
+			accept(partition.getKey(), cell);
 		}
+		logger.info("cell name, value: {}", strBuilder.toString());
 	}
 
 	@Override
 	public void accept(DecoratedKey key, OnDiskAtom cell)
 	{
+			
 		if (currentKey != key)
 		{
 			flush();
+			numKeys++;
 			currentKey = key;
 		}
 
+		numCells++;		
 		columnFamily.addAtom(cell);
-		isEmpty = false;
 	}
 
 	@Override
@@ -107,10 +123,10 @@ public class BackupSinkForDeletingCompaction implements IDeletedRecordsSink
 	@Override
 	public void close() throws IOException
 	{
-		if (!isEmpty)
+		if (numKeys > 0 && numCells > 0)
 		{
 			flush();
-			logger.info("Cleanly closing backup operation for {}", writer.getFilename());
+			logger.info("Cleanly closing backup operation for {} with {} keys and {} cells", writer.getFilename(), numKeys, numCells);
 			writer.close();
 		}
 		else

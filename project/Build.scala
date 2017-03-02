@@ -8,7 +8,7 @@ object CassandraUtilBuild extends Build {
     shellPrompt := { s => Project.extract(s).currentProject.id + " > "}
   }
 
-  val libVersion = "0.25"
+  val libVersion = "0.26"
   val datastaxVersion = "3.0.0"
   //val datastaxVersion = "2.1.7"
   val slf4jVersion = "1.7.+"

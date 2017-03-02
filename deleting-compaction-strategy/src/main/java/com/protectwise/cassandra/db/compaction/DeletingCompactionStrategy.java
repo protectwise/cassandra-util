@@ -102,18 +102,16 @@ public class DeletingCompactionStrategy extends AbstractCompactionStrategy
     @Override
     public ScannerList getScanners(Collection<SSTableReader> sstables, Range<Token> range)
     {
-        IDeletedRecordsSink backupSink = null;
-        if (options.deletedRecordsSinkDirectory != null)
-        {
-            backupSink = new BackupSinkForDeletingCompaction(cfs, options.deletedRecordsSinkDirectory);
-        }
-
-
         ScannerList scanners = underlying.getScanners(sstables, range);
         List<ISSTableScanner> filteredScanners = new ArrayList<ISSTableScanner>(scanners.scanners.size());
         AbstractSimpleDeletingConvictor convictor = options.buildConvictor();
         for (ISSTableScanner scanner : scanners.scanners)
         {
+            IDeletedRecordsSink backupSink = null;
+            if (options.deletedRecordsSinkDirectory != null)
+            {
+                backupSink = new BackupSinkForDeletingCompaction(cfs, options.deletedRecordsSinkDirectory);
+            }
             filteredScanners.add(new FilteringSSTableScanner(
                     scanner,
                     convictor,
