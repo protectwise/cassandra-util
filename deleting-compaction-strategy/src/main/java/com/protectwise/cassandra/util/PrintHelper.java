@@ -15,11 +15,9 @@
  */
 package com.protectwise.cassandra.util;
 
+import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.db.Cell;
-import org.apache.cassandra.db.ColumnFamily;
-import org.apache.cassandra.db.ColumnFamilyStore;
-import org.apache.cassandra.db.OnDiskAtom;
+import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.*;
 import org.apache.cassandra.db.marshal.AbstractType;
@@ -68,6 +66,34 @@ public class PrintHelper
 		}
 	}
 
+	public static String print(DecoratedKey decoratedKey, CFMetaData cfMetaData) {
+		StringWriter w = new StringWriter();
+		print(decoratedKey, cfMetaData, w);
+		return w.toString();
+	}
+
+	private static void print(DecoratedKey decoratedKey, CFMetaData cfMetaData, StringWriter w) {
+		ByteBuffer[] keyParts;
+		AbstractType<?> validator = cfMetaData.getKeyValidator();
+		if (validator instanceof CompositeType)
+		{
+			keyParts = ((CompositeType) validator).split(decoratedKey.getKey());
+		}
+		else
+		{
+			keyParts = new ByteBuffer[]{
+					decoratedKey.getKey()
+			};
+		}
+		List<ColumnDefinition> pkc = cfMetaData.partitionKeyColumns();
+		for (ColumnDefinition def : pkc)
+		{
+			w.write(bufToString(def.name.bytes));
+			w.write(':');
+			w.write(def.type.getSerializer().deserialize(keyParts[def.position()]).toString());
+		}
+	}
+
 	public static String print(OnDiskAtomIterator oda, OnDiskAtom i, ColumnFamilyStore cfs) {
 		StringWriter w = new StringWriter();
 		print(oda, i, cfs, w);
@@ -85,15 +111,11 @@ public class PrintHelper
 		print(i, cfs, w);
 		return w.toString();
 	}
+
+
 	public static void print(OnDiskAtom i, ColumnFamilyStore cfs, StringWriter w) {
 
-		for ( ColumnDefinition def : cfs.metadata.clusteringColumns() )
-		{
-			w.write(bufToString(def.name.bytes));
-			w.write(':');
-			w.write(def.type.getSerializer().deserialize(i.name().get(def.position())).toString());
-			w.write(',');
-		}
+		printClusteringKeys(i, cfs.metadata, w);
 
 		if (i instanceof Cell) {
 			ColumnDefinition col = cfs.metadata.getColumnDefinition(((Cell)i).name());
@@ -111,6 +133,22 @@ public class PrintHelper
 			w.write(i.getClass().getSimpleName());
 		}
 
+	}
+
+	public static String printClusteringKeys(OnDiskAtom i, CFMetaData cfMetaData) {
+		StringWriter w = new StringWriter();
+		printClusteringKeys(i, cfMetaData, w);
+		return w.toString();
+	}
+
+	private static void printClusteringKeys(OnDiskAtom i, CFMetaData cfMetaData, StringWriter w) {
+		for ( ColumnDefinition def : cfMetaData.clusteringColumns() )
+		{
+			w.write(bufToString(def.name.bytes));
+			w.write(':');
+			w.write(def.type.getSerializer().deserialize(i.name().get(def.position())).toString());
+			w.write(',');
+		}
 	}
 
 	public static String bufToString(ByteBuffer buf) {

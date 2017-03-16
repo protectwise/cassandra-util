@@ -37,6 +37,9 @@ public final class DeletingCompactionStrategyOptions
     protected static final String DRY_RUN_KEY = "dcs_is_dry_run";
     protected static final String DELETED_RECORDS_DIRECTORY = "dcs_backup_dir";
     protected static final String STATUS_REPORT_INTERVAL = "dcs_status_report_ms";
+    protected static final String KAFKA_QUEUE_BOOTSTRAP_SERVERS_KEY = "dcs_kafka_servers";
+    protected static final String PURGED_DATA_KAFKA_TOPIC_KEY = "dcs_kafka_purged_data_topic";
+    protected static final String PURGED_DATA_KAFKA_DEFAULT_TOPIC = "cassandra_compaction_deleted_data_topic";
 
     protected final String convictorClassName;
     protected final Map<String, String> convictorOptions;
@@ -46,7 +49,8 @@ public final class DeletingCompactionStrategyOptions
     protected final boolean dryRun;
     protected final File deletedRecordsSinkDirectory;
     protected final long statsReportInterval;
-
+    protected final String kafkaQueueBootstrapServers;
+    protected final String cassandraPurgedKafkaTopic;
     @SuppressWarnings("unchecked")
     public DeletingCompactionStrategyOptions(ColumnFamilyStore cfs, Map<String, String> options)
     {
@@ -116,10 +120,35 @@ public final class DeletingCompactionStrategyOptions
             statusReportInterval = Long.parseLong(options.get(STATUS_REPORT_INTERVAL));
         }
 
+        String kafkaBootstrapServers = "";
+        try {
+            if(options.containsKey(KAFKA_QUEUE_BOOTSTRAP_SERVERS_KEY)) {
+                kafkaBootstrapServers = options.get(KAFKA_QUEUE_BOOTSTRAP_SERVERS_KEY).replaceAll("[\\s]+", "");
+            } else {
+                dryRun = true;
+                logger.warn("Didn't find configuration dcs_kafka_servers, compaction will revert to dry run");
+            }
+        }catch(Exception e) {
+            dryRun = true;
+            logger.warn("Didn't find configuration dcs_kafka_servers, compaction will revert to dry run");
+        }
+
+
+        String kafkaTopic = null;
+        try {
+            kafkaTopic = options.getOrDefault(PURGED_DATA_KAFKA_TOPIC_KEY, PURGED_DATA_KAFKA_DEFAULT_TOPIC).replaceAll("[\\s]+","");
+        }catch(Exception e) {
+            dryRun = true;
+            logger.warn("Kafak topic couldn't set for purged data.  Compaction will revert to dry run.", e);
+        }
+
+
         this.deletedRecordsSinkDirectory = backupDir;
         this.dryRun = dryRun;
         this.enabled = enabled;
         this.statsReportInterval = statusReportInterval;
+        this.kafkaQueueBootstrapServers = kafkaBootstrapServers;
+        this.cassandraPurgedKafkaTopic = kafkaTopic;
     }
 
     public AbstractSimpleDeletingConvictor buildConvictor() {
@@ -198,6 +227,13 @@ public final class DeletingCompactionStrategyOptions
             options.remove(STATUS_REPORT_INTERVAL);
         }
 
+        if(options.containsKey(KAFKA_QUEUE_BOOTSTRAP_SERVERS_KEY)) {
+            options.remove(KAFKA_QUEUE_BOOTSTRAP_SERVERS_KEY);
+        }
+
+        if(options.containsKey(PURGED_DATA_KAFKA_TOPIC_KEY)) {
+            options.remove(PURGED_DATA_KAFKA_TOPIC_KEY);
+        }
         return validatePassthrough(convictor, validatePassthrough(underlyingClass, options));
     }
 

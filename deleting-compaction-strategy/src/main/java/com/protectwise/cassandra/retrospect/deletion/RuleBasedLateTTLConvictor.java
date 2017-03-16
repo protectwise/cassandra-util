@@ -24,13 +24,19 @@ import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.UntypedResultSet;
 import org.apache.cassandra.cql3.statements.ParsedStatement;
 import org.apache.cassandra.cql3.statements.SelectStatement;
+import org.apache.cassandra.db.ArrayBackedSortedColumns;
+import org.apache.cassandra.db.Cell;
+import org.apache.cassandra.db.ColumnFamily;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.OnDiskAtom;
+import org.apache.cassandra.db.Row;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.composites.Composite;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.TupleType;
+import org.apache.cassandra.db.marshal.MapType;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.RequestExecutionException;
 import org.apache.cassandra.exceptions.SyntaxException;
@@ -40,6 +46,9 @@ import org.apache.cassandra.utils.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.lang.StringBuilder;
+import java.lang.String;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -272,7 +281,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			cols.put(cs.name.toString(), cs);
 		}
 
-		if (!cols.containsKey("column") || !cols.containsKey("rulename") || !cols.containsKey("range") || !cols.containsKey("ttl"))
+		if (!cols.containsKey("column") || !cols.containsKey("rulename") || !cols.containsKey("range_lower") || !cols.containsKey("range_upper") || !cols.containsKey("ttl"))
 		{
 			throw new ConfigurationException("The select statement must return the columns 'column', 'rulename', 'range', and 'ttl'");
 		}
@@ -284,7 +293,7 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		}
 
 		//  Validate that "range" is of type tuple<text,text>, ugh.
-		CQL3Type rangeType = cols.get("range").type.asCQL3Type();
+		/*CQL3Type rangeType = cols.get("range").type.asCQL3Type();
 		if (!(rangeType instanceof CQL3Type.Tuple))
 		{
 			throw new ConfigurationException("The column 'range' must be of type tuple<text,text>  Found " + cols.get("column").type.getSerializer().getType());
@@ -300,7 +309,18 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			{
 				throw new ConfigurationException("The column 'range' must be of type tuple<text,text>  Found " + cols.get("column").type.getSerializer().getType());
 			}
+		}*/
+
+		// validate that range, range_lower, range_upper
+                CQL3Type rangeLowerType = cols.get("range_lower").type.asCQL3Type();
+		if(!rangeLowerType.equals(CQL3Type.Native.TEXT)) {
+			throw new ConfigurationException("The column 'range_lower' must be of type text  Found " + cols.get("range_lower").type.getSerializer().getType());
 		}
+
+		CQL3Type rangeUpperType = cols.get("range_upper").type.asCQL3Type();
+                if(!rangeLowerType.equals(CQL3Type.Native.TEXT)) {
+                        throw new ConfigurationException("The column 'range' must be of type map<text,text>  Found " + cols.get("range_upper").type.getSerializer().getType());
+                }
 
 		// Validate that 'ttl' is of type bigint
 		CQL3Type ttlType = cols.get("ttl").type.asCQL3Type();
@@ -344,7 +364,9 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 				ranges = new ArrayList<>();
 				rule.put(column, ranges);
 			}
-			ByteBuffer[] rawRange = ((TupleType) rangeType.getType()).split(row.getBlob("range"));
+			ByteBuffer[] rawRange = new ByteBuffer[2];
+			rawRange[0] = row.getBlob("range_lower");
+			rawRange[1] =  row.getBlob("range_upper");
 			ranges.add(rawRange);
 			if (logger.isDebugEnabled())
 			{
@@ -555,7 +577,32 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		options.remove(RULES_STATEMENT_KEY);
 		return options;
 	}
+	
+	private void iterateRow(OnDiskAtomIterator partition, ColumnFamily columnFamily)
+	{
+		DecoratedKey currentKey = partition.getKey();
+		
+		// Write through the entire partition.
+		while (partition.hasNext())
+		{
+			accept(currentKey, partition.getKey(), partition.next(), columnFamily);
+		}
+		//logger.warn("column family: {}", PrintHelper.print(partition, cfs));
+	}
 
+	
+	private void accept(DecoratedKey currentKey, DecoratedKey key, OnDiskAtom cell, ColumnFamily columnFamily)
+	{
+		if (currentKey != key)
+		{
+			currentKey = key;
+		}
+		if(cell instanceof Cell) {
+			logger.info("cell name is: {}, Composite: {}", ((Cell)cell).name().toByteBuffer(), cell.name());
+			//logger.info("cellvalue: {}", getBytes(cell.name(), cfs.metadata.getColumnDefinition(((Cell)cell).name())));
+		}
+		columnFamily.addAtom(cell);
+	}
 
 	@Override
 	public boolean shouldKeepPartition(OnDiskAtomIterator key)
@@ -572,8 +619,22 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 		partitionRules = new ArrayList<>();
 		Map<ByteBuffer, ByteBuffer> namedPkColumns = getNamedPkColumns(key);
 
+		StringBuilder partitonKeys = new StringBuilder();
+		for(ByteBuffer bytes: namedPkColumns.keySet()) {
+                    partitonKeys.append(new String(bytes.array(), StandardCharsets.UTF_8));
+		}
+		
+        logger.info("Disk atom iterator: {}", PrintHelper.print(key, cfs));
+		logger.info("Named partiton keys are: {}", PrintHelper.printMap(namedPkColumns));
+		
+		//Row row = new Row(key.getKey(), key.getColumnFamily());
+
+		ColumnFamily columnFamily = ArrayBackedSortedColumns.factory.create(cfs.keyspace.getName(), cfs.getColumnFamilyName());
+		//iterateRow(key, columnFamily);
+		logger.info("Named row: {}", columnFamily);
 		for (Rule rule : rules)
 		{
+			logger.info("rule is: {}, with ttl: {}", rule.name, rule.ttl);
 			if (rule.testColumns(namedPkColumns))
 			{
 				partitionRules.add(rule);
@@ -586,12 +647,16 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 						effectiveTTL = rule.ttl;
 					}
 				}
+			} else {
+				logger.info("rule is: {}", rule.name);
 			}
 		}
 		if (logger.isTraceEnabled())
 		{
 			logger.trace("Partition {} being considered against {} rules", PrintHelper.print(key, cfs), partitionRules.size());
 		}
+		
+		logger.info("");
 		return true;
 	}
 
@@ -669,6 +734,13 @@ public class RuleBasedLateTTLConvictor extends AbstractClusterDeletingConvictor
 			logger.trace("Considering {} rules against the cluster key", partitionRules.size());
 		}
 		// We've already tested for the presence of cluster keys in the ruleset from within shouldKeepAtom()
+		Map<ByteBuffer, ByteBuffer> clusterKeyValues = getClusteringValues(name);
+		Map<ByteBuffer, ByteBuffer> namedPkColumns = getNamedPkColumns(partition);
+		
+		logger.info("clustering keys: {}", PrintHelper.printMap(clusterKeyValues));
+		logger.info("Partition keys: {}", PrintHelper.printMap(namedPkColumns));
+		logger.info("row: {}", PrintHelper.print(partition, cfs));
+		
 		for (Rule rule : partitionRules)
 		{
 			if (rule.testColumns(getClusteringValues(name)))
