@@ -16,7 +16,7 @@ object CassandraUtilBuild extends Build {
   val playVersion = "2.3.+"
   val cassandraVersion = "2.1.14"
   //val cassandraVersion = "2.1.8"
-
+  val kafkaVersion = "0.9.0.1"
   val scalaVersionsToCompile = Seq("2.10.5", "2.11.6")
 
   val baseDependencies = Seq(
@@ -124,7 +124,8 @@ object CassandraUtilBuild extends Build {
         case d if !d.configurations.isDefined => d % Provided
         case d => d
       } ++ Seq(
-        "org.apache.cassandra" % "cassandra-all" % cassandraVersion % Provided
+        "org.apache.cassandra" % "cassandra-all" % cassandraVersion % Provided,
+        "org.apache.kafka" % "kafka-clients" % kafkaVersion % Compile
       ),
 
       javaOptions in(Test, run) ++= Seq(
